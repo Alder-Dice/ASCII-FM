@@ -31,7 +31,7 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             height: 100vh;
             overflow: hidden;
             display: flex;
@@ -303,8 +303,8 @@
 
         #patchContainer {
             position: relative;
-            width: 800px;
-            height: 400px;
+            width: min(800px, 90vw);
+            height: min(400px, 50vh);
             overflow: visible; /* Allow SVG branches to extend beyond container */
         }
 
@@ -1331,6 +1331,83 @@
             bottom: 0;
             left: 0;
             right: 0;
+        }
+
+        /* ===== MOBILE RESPONSIVE STYLES ===== */
+
+        /* Tablets and small laptops */
+        @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+
+            #patchContainer {
+                width: min(700px, 92vw);
+                height: min(350px, 55vh);
+            }
+        }
+
+        /* Mobile phones */
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+
+            #playerLayout {
+                gap: 20px;
+                padding: 10px;
+            }
+
+            #patchContainer {
+                width: 95vw;
+                height: 60vh;
+            }
+
+            #patchContainer .step-btn {
+                width: 28px;
+                height: 28px;
+                font-size: 0.55rem;
+                border-width: 1.5px;
+            }
+
+            #patchContainer .step-btn.active {
+                transform: scale(1.3);
+            }
+
+            #patchContainer .step-btn:hover {
+                transform: scale(1.05);
+            }
+
+            #playButton {
+                width: 50px;
+                height: 38px;
+                font-size: 1.3rem;
+            }
+        }
+
+        /* Very small phones */
+        @media (max-width: 360px) {
+            #patchContainer {
+                width: 98vw;
+                height: 65vh;
+            }
+
+            #patchContainer .step-btn {
+                width: 24px;
+                height: 24px;
+                font-size: 0.5rem;
+                border-width: 1px;
+            }
+
+            #patchContainer .step-btn.active {
+                transform: scale(1.2);
+            }
+
+            #playButton {
+                width: 45px;
+                height: 35px;
+                font-size: 1.2rem;
+            }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
@@ -4721,6 +4798,20 @@
         // --- Patch Bank Logic ---
 
         // Tree Generation Functions
+
+        // Get responsive button size based on screen width (matches CSS media queries)
+        function getButtonSize() {
+            const screenWidth = window.innerWidth;
+            if (screenWidth <= 360) return 24;
+            if (screenWidth <= 480) return 28;
+            return 32;
+        }
+
+        // Get responsive minimum distance based on button size
+        function getMinDistance() {
+            return getButtonSize() + 6; // Keep 6px gap between buttons
+        }
+
         function generateTreeStructure(nodeCount) {
             // Create tree that widens towards the top (inverted triangle shape)
             const nodes = Array(nodeCount).fill(null).map((_, i) => ({
@@ -4811,9 +4902,9 @@
 
         // Layout Calculation Functions
         function calculateVerticalPositions(levelCount, containerHeight) {
-            const BUTTON_SIZE = 32;
+            const BUTTON_SIZE = getButtonSize();
             const TOP_MARGIN = 16;
-            const BOTTOM_MARGIN = 16;
+            const BOTTOM_MARGIN = 80; // Increased to make room for trunk and pot below root node
             const TRUNK_MULTIPLIER = 1.8; // Make trunk (level 0→1) longer
 
             const usableHeight = containerHeight - TOP_MARGIN - BOTTOM_MARGIN - BUTTON_SIZE;
@@ -4886,7 +4977,7 @@
 
             // Get base vertical positions
             const levelYs = calculateVerticalPositions(levelCount, 400);
-            const BUTTON_SIZE = 32;
+            const BUTTON_SIZE = getButtonSize();
 
             // Create base positions
             const basePositions = nodes.map(node => ({
@@ -4897,7 +4988,7 @@
             // Add organic randomness while preventing overlaps
             const HORIZONTAL_JITTER = 25; // ±25px horizontal variance
             const VERTICAL_JITTER = 20;   // ±20px vertical variance
-            const MIN_DISTANCE = 38;      // Minimum distance between button centers
+            const MIN_DISTANCE = getMinDistance();      // Minimum distance between button centers
 
             // Seed random with node ID for consistency across resizes
             function seededRandom(seed) {
@@ -4954,7 +5045,7 @@
 
         // SVG Rendering Functions
         function createBezierPath(parentPos, childPos) {
-            const BUTTON_SIZE = 32;
+            const BUTTON_SIZE = getButtonSize();
 
             // Button centers
             const startX = parentPos.x + BUTTON_SIZE / 2;
@@ -5011,7 +5102,7 @@
                 const playY = playRect.top - containerRect.top;
 
                 // Root button bottom center
-                const BUTTON_SIZE = 32;
+                const BUTTON_SIZE = getButtonSize();
                 const rootX = rootPos.x + BUTTON_SIZE / 2;
                 const rootY = rootPos.y + BUTTON_SIZE;
 
