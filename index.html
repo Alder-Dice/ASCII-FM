@@ -1353,7 +1353,7 @@
     <!-- Main Layout Container -->
     <div id="playerLayout">
         <!-- Patch Tree -->
-        <div id="patchContainer" title="Click to Load Patch">
+        <div id="patchContainer">
             <!-- 32 patch buttons generated here -->
         </div>
 
@@ -4742,28 +4742,31 @@
             const TARGET_LEVELS = 4;
             const MAX_CHILDREN = 4;
 
-            // Distribute nodes with gradual growth (wider at top, but capped per level)
+            // Distribute nodes with organic, irregular growth
             while (unassigned.length > 0) {
                 currentLevel++;
                 const parents = assignedByLevel[currentLevel - 1];
 
-                // Calculate nodes for this level with balanced distribution
+                // Calculate nodes for this level with more variance
                 const levelsRemaining = TARGET_LEVELS - currentLevel + 1;
 
                 let nodesForLevel;
                 if (levelsRemaining === 1) {
-                    // Last level gets remaining, but cap at reasonable amount
-                    nodesForLevel = Math.min(unassigned.length, 12);
+                    // Last level gets remaining
+                    nodesForLevel = unassigned.length;
                 } else {
-                    // Gradual increase: level 1 gets ~3-4, level 2 gets ~6-8, level 3 gets ~10-12
+                    // More organic distribution with wider variance
                     const baseAmount = 2 + currentLevel * 2;
                     const remaining = unassigned.length;
                     const avgPerLevel = Math.ceil(remaining / levelsRemaining);
 
+                    // Increase randomness range from ±1 to ±3 nodes
+                    const randomVariance = Math.floor(Math.random() * 7) - 3; // -3 to +3
+
                     nodesForLevel = Math.min(
                         unassigned.length, // Never exceed available nodes
-                        baseAmount + Math.floor(Math.random() * 2), // Add slight randomness
-                        avgPerLevel * 1.2, // Allow 20% more than average
+                        Math.max(2, baseAmount + randomVariance), // At least 2 nodes per level
+                        Math.floor(avgPerLevel * 1.5), // Allow up to 50% more than average
                         remaining - (levelsRemaining - 1) * 2 // Ensure future levels get at least 2
                     );
                 }
@@ -4816,13 +4819,26 @@
             const usableHeight = containerHeight - TOP_MARGIN - BOTTOM_MARGIN - BUTTON_SIZE;
             const baseSpacing = usableHeight / (levelCount - 1 + (TRUNK_MULTIPLIER - 1));
 
-            // Calculate positions with emphasized trunk
+            // Seeded random for consistent spacing across resizes
+            function seededRandom(seed) {
+                const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+                return x - Math.floor(x);
+            }
+
+            // Calculate positions with emphasized trunk and varied spacing
             const positions = [];
             let currentY = containerHeight - BOTTOM_MARGIN - BUTTON_SIZE / 2;
             positions.push(currentY);
 
             for (let level = 1; level < levelCount; level++) {
-                const spacing = level === 1 ? baseSpacing * TRUNK_MULTIPLIER : baseSpacing;
+                let spacing = level === 1 ? baseSpacing * TRUNK_MULTIPLIER : baseSpacing;
+
+                // Add random variance to spacing (±20% for non-trunk levels)
+                if (level > 1) {
+                    const variance = (seededRandom(level * 7) - 0.5) * 0.4; // ±20%
+                    spacing *= (1 + variance);
+                }
+
                 currentY -= spacing;
                 positions.push(currentY);
             }
@@ -4831,7 +4847,7 @@
         }
 
         function calculateHorizontalPositions(nodes, levelCount, containerWidth) {
-            const MIN_SPACING = 60;
+            const MIN_SPACING = 45; // Reduced from 60 for tighter clustering
 
             // Calculate subtree widths (bottom-up)
             const subtreeWidths = new Map();
@@ -4848,7 +4864,7 @@
             }
             calcWidth(0);
 
-            // Assign positions (top-down)
+            // Assign base positions (top-down)
             const positions = new Map();
             function assignPos(nodeId, leftBound, rightBound) {
                 const node = nodes[nodeId];
@@ -4868,13 +4884,72 @@
             }
             assignPos(0, 0, containerWidth);
 
-            // Convert to {x, y} positions
+            // Get base vertical positions
             const levelYs = calculateVerticalPositions(levelCount, 400);
             const BUTTON_SIZE = 32;
-            return nodes.map(node => ({
+
+            // Create base positions
+            const basePositions = nodes.map(node => ({
                 x: positions.get(node.id) - BUTTON_SIZE / 2,
                 y: levelYs[node.level] - BUTTON_SIZE / 2
             }));
+
+            // Add organic randomness while preventing overlaps
+            const HORIZONTAL_JITTER = 25; // ±25px horizontal variance
+            const VERTICAL_JITTER = 20;   // ±20px vertical variance
+            const MIN_DISTANCE = 38;      // Minimum distance between button centers
+
+            // Seed random with node ID for consistency across resizes
+            function seededRandom(seed) {
+                const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+                return x - Math.floor(x);
+            }
+
+            // Apply jitter to all nodes except root
+            const finalPositions = basePositions.map((pos, i) => {
+                if (i === 0) return pos; // Keep root centered
+
+                const xJitter = (seededRandom(i * 2) - 0.5) * 2 * HORIZONTAL_JITTER;
+                const yJitter = (seededRandom(i * 3) - 0.5) * 2 * VERTICAL_JITTER;
+
+                return {
+                    x: pos.x + xJitter,
+                    y: pos.y + yJitter
+                };
+            });
+
+            // Check for overlaps and adjust if needed (simple collision resolution)
+            for (let attempts = 0; attempts < 3; attempts++) {
+                let hasOverlap = false;
+
+                for (let i = 0; i < finalPositions.length; i++) {
+                    for (let j = i + 1; j < finalPositions.length; j++) {
+                        const dx = (finalPositions[i].x + BUTTON_SIZE/2) - (finalPositions[j].x + BUTTON_SIZE/2);
+                        const dy = (finalPositions[i].y + BUTTON_SIZE/2) - (finalPositions[j].y + BUTTON_SIZE/2);
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < MIN_DISTANCE) {
+                            hasOverlap = true;
+                            // Push apart slightly
+                            const pushDist = (MIN_DISTANCE - dist) / 2;
+                            const angle = Math.atan2(dy, dx);
+
+                            if (i !== 0) { // Don't move root
+                                finalPositions[i].x += Math.cos(angle) * pushDist * 0.5;
+                                finalPositions[i].y += Math.sin(angle) * pushDist * 0.5;
+                            }
+                            if (j !== 0) { // Don't move root
+                                finalPositions[j].x -= Math.cos(angle) * pushDist * 0.5;
+                                finalPositions[j].y -= Math.sin(angle) * pushDist * 0.5;
+                            }
+                        }
+                    }
+                }
+
+                if (!hasOverlap) break;
+            }
+
+            return finalPositions;
         }
 
         // SVG Rendering Functions
